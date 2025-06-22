@@ -208,13 +208,11 @@ class Simulator:
 
 ---
 
-## 🛠 사용 라이브러리
+## 사용 라이브러리
 
 ```python
 import numpy as np
 import matplotlib.pyplot as plt
 from prettytable import PrettyTable
 import random
-```
-
 ```

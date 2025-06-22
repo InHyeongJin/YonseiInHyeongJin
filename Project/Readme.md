@@ -213,21 +213,8 @@ class Simulator:
 ```python
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.linear_model import LinearRegression
+from prettytable import PrettyTable
 import random
 ```
 
----
-
-## 실행 방법 (예시)
-
-```python
-market = MarketSimulator(initial_price=100)
-data = market.generate_data(steps=100)
-
-predictor = AdaptiveRecurrencePredictor(window_size=5)
-trader = Trader(cash=10000)
-simulator = Simulator(data, predictor, trader)
-simulator.run()
-simulator.plot_results()
 ```

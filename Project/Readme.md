@@ -22,64 +22,167 @@
 
 ### 1. `AdaptiveRecurrencePredictor`
 
-> **역할**: 과거 데이터를 기반으로 한 점화식 예측 모델 구현
+> **역할**: 직전 두 시점의 가격을 기반으로 다음 시점 가격을 예측하는 단순 점화식 기반 선형 회귀 모델
 
-* `__init__`: 예측할 과거 주기 길이(`window_size`) 설정
-* `fit`: 과거 가격 데이터를 저장함
-* `predict_next`: 최근 `window_size` 만큼의 데이터를 이용해 다음 값을 단순 선형 회귀를 통해 예측
+* `__init__`: 예측 계수를 저장할 변수 `self.coefficients`를 초기화합니다. 처음에는 예측 계수가 없기 때문에 `None`으로 설정됩니다.
+
+* `fit(prev2, prev1, current)`: 두 시점의 과거 가격(`prev2`, `prev1`)을 독립변수로, 현재 가격(`current`)을 종속변수로 하여 선형 회귀 계수를 계산합니다. `np.linalg.lstsq`를 사용해 최소제곱법으로 계수를 구하고, 이 값을 저장합니다.
+
+* `predict_next(prev2, prev1)`: 저장된 계수를 이용하여 다음 가격을 예측합니다. 계수가 아직 없을 경우에는 이전 가격 중 하나를 그대로 반환합니다. 예측은 `prev2 * w1 + prev1 * w2` 형태로 계산됩니다.
 
 ```python
-def predict_next(self):
-    if len(self.data) < self.window_size:
-        return self.data[-1]
-    X = np.arange(self.window_size).reshape(-1, 1)
-    y = np.array(self.data[-self.window_size:])
-    model = LinearRegression().fit(X, y)
-    return model.predict([[self.window_size]])[0]
+class AdaptiveRecurrencePredictor:
+    def __init__(self):
+        self.coefficients = None
+
+    def fit(self, prev2, prev1, current):
+        A = np.array([[prev2, prev1]])
+        y = np.array([current])
+        coeffs, _, _, _ = np.linalg.lstsq(A, y, rcond=None)
+        self.coefficients = coeffs.flatten()
+        return self.coefficients
+
+    def predict_next(self, prev2, prev1):
+        if self.coefficients is None or len(self.coefficients) == 0:
+            return prev1
+        return float(self.coefficients[0] * prev2 + self.coefficients[1] * prev1)
 ```
 
 ---
 
 ### 2. `MarketSimulator`
 
-> **역할**: 시뮬레이션용 시장 데이터 생성 (랜덤 워크 + 노이즈)
+> **역할**: 시장의 가격 흐름을 랜덤한 요인으로 생성하여 투자 시뮬레이션의 환경을 제공합니다.
 
-* `generate_data`: 초기 가격을 기준으로 확률적 주가 변동 시뮬레이션
-* `get_data`: n일 간의 가격 데이터 출력
+* `__init__(length)`: 시뮬레이션할 전체 기간(`length`)을 받아 내부적으로 가격을 생성합니다.
+
+* `_generate_prices()`: 초기 가격 2개는 고정값 `[100, 102]`으로 시작합니다. 이후 라운드부터는 직전 가격에 `0.95~1.05` 범위의 추세 요인을 곱하고, 정규분포 기반의 무작위 노이즈를 더하여 다음 가격을 생성합니다. 이 방식은 무작위성과 약간의 추세성을 동시에 반영합니다.
 
 ```python
-def generate_data(self, steps=100):
-    price = self.initial_price
-    self.data = []
-    for _ in range(steps):
-        change_percent = random.uniform(-self.volatility, self.volatility)
-        price *= (1 + change_percent)
-        self.data.append(price)
-    return self.data
+class MarketSimulator:
+    def __init__(self, length):
+        self.length = length
+        self.prices = self._generate_prices()
+
+    def _generate_prices(self):
+        prices = [100, 102]
+        for _ in range(self.length - 2):
+            trend_factor = np.random.uniform(0.95, 1.05)
+            shock = np.random.normal(0, 3)
+            next_price = trend_factor * prices[-1] + shock
+            prices.append(max(1, next_price))
+        return prices
 ```
 
 ---
 
 ### 3. `Trader`
 
-> **역할**: 예측값과 실제 이동 평균선을 기준으로 매수/매도 판단 후 포지션 변화
+> **역할**: 예측된 가격과 실제 가격의 차이를 분석하여 매수, 매도, 보유 등의 결정을 내리고, 자산을 운용합니다.
 
-* `decide`: 다음날 가격을 예측하고, 현재가와 비교 후 행동 결정
-* `trade`: `cash`, `stock`, `asset_history` 업데이트
-* `finalize`: 시뮬레이션 종료 후 잔여 주식을 모두 매도하여 현금화
+* `__init__(name, cash)`: 초기 자산(cash), 주식 보유량, 거래 기록 등을 초기화합니다.
+
+* `decide(current_price, predicted_price)`: 예측값과 실제값을 비교하여 다음과 같은 조건으로 행동을 결정합니다:
+
+  * 예측값과 실제값의 차이가 작으면 관망(Hold)
+  * 예측 상승폭이 2% 이상 → 자산의 75% 매수
+  * 예측 상승폭이 1\~2% → 자산의 30% 매수
+  * 예측 하락폭이 1% 이상 → 전량 매도
+  * 현재가가 평균 매입가보다 5% 이상 하락 시 → 손절
+
+* `net_worth(current_price)`: 현재 보유 현금과 주식의 시장 가치를 합산하여 자산 총액을 계산합니다.
+
+* `print_history()`: 거래 기록을 표 형식으로 출력합니다.
+
+* `get_net_worth_series(prices)`: 각 라운드마다의 순자산 변화를 리스트로 반환합니다.
 
 ```python
-def trade(self, action, current_price):
-    if action == 'buy':
-        amount = self.cash / current_price
-        self.stock += amount
-        self.cash = 0
-    elif action == 'sell':
-        self.cash += self.stock * current_price
-        self.stock = 0
+class Trader:
+    def __init__(self, name, cash):
+        self.name = name
+        self.cash = cash
+        self.shares = 0
+        self.history = []
+        self.avg_buy_price = None
+
+    def decide(self, current_price, predicted_price):
+        error_threshold = 2.0
+        if abs(predicted_price - current_price) < error_threshold:
+            action = "Hold"
+        else:
+            gain_ratio = (predicted_price - current_price) / current_price
+            if self.avg_buy_price and current_price < 0.95 * self.avg_buy_price:
+                self.cash += self.shares * current_price
+                action = f"Stop-loss: Sell {self.shares}"
+                self.shares = 0
+                self.avg_buy_price = None
+            elif gain_ratio > 0.02:
+                to_buy = int(0.75 * self.cash / current_price)
+                self.shares += to_buy
+                self.cash -= to_buy * current_price
+                if to_buy > 0:
+                    self.avg_buy_price = current_price
+                action = f"Buy {to_buy}"
+            elif gain_ratio > 0.01:
+                to_buy = int(0.3 * self.cash / current_price)
+                self.shares += to_buy
+                self.cash -= to_buy * current_price
+                if to_buy > 0:
+                    self.avg_buy_price = current_price
+                action = f"Buy {to_buy}"
+            elif gain_ratio < -0.01:
+                self.cash += self.shares * current_price
+                action = f"Sell {self.shares}"
+                self.shares = 0
+                self.avg_buy_price = None
+            else:
+                action = "Hold"
+
+        self.history.append((current_price, predicted_price, self.cash, self.shares, action))
 ```
 
 ---
+
+### 4. `Simulator`
+
+> **역할**: 전체 시뮬레이션 실행, 가격 예측과 투자 전략 수행, 시각화 포함
+
+* `__init__`: 시뮬레이터는 시장(MarketSimulator), 예측기(AdaptiveRecurrencePredictor), 투자자(Trader)를 초기화합니다.
+
+* `run()`: 전체 라운드 동안 다음 순서로 반복:
+
+  * 직전 두 가격으로 예측
+  * 실제 가격과 비교해 투자자 결정 → 거래 실행
+  * 예측기 업데이트 (학습)
+  * 마지막에 순자산 출력 및 그래프 시각화
+
+* `_plot(prices)`: 실제 가격, 예측 가격, 이동 평균(5일)을 그래프로 출력합니다.
+
+* `_plot_net_worth(prices)`: 순자산의 변화 추이를 그래프로 시각화합니다.
+
+```python
+class Simulator:
+    def __init__(self, length=30):
+        self.market = MarketSimulator(length)
+        self.predictor = AdaptiveRecurrencePredictor()
+        self.trader = Trader("Player", 10000)
+
+    def run(self):
+        prices = self.market.prices
+        for i in range(2, len(prices)):
+            prev2, prev1 = prices[i-2], prices[i-1]
+            predicted = self.predictor.predict_next(prev2, prev1)
+            actual = prices[i]
+            self.trader.decide(actual, predicted)
+            self.predictor.fit(prev2, prev1, actual)
+
+        self.trader.print_history()
+        final_price = prices[-1]
+        print(f"\n최종 자산 가치: {round(self.trader.net_worth(final_price), 2)}원")
+        self._plot(prices)
+        self._plot_net_worth(prices)
+```
+
 
 ### 4. `Simulator`
 

@@ -254,7 +254,7 @@ class Simulator:
 
 ---
 
-## 사용 라이브러리
+## 사용한 라이브러리
 
 ```python
 import numpy as np

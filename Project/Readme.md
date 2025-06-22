@@ -182,29 +182,6 @@ class Simulator:
         self._plot(prices)
         self._plot_net_worth(prices)
 ```
-
-
-### 4. `Simulator`
-
-> **역할**: 전체 시뮬레이션 실행 및 결과 시각화
-
-* `run`: 예측-매매 루프 실행, 각 시점의 순자산 기록
-* `plot_results`: 실제 가격, 예측값, 자산 변화, 이동평균선 등 시각화
-
-```python
-def run(self):
-    for day in range(self.predictor.window_size, len(self.data)):
-        current_price = self.data[day]
-        ma = np.mean(self.data[day - self.predictor.window_size:day])
-        self.predictor.fit(self.data[day - self.predictor.window_size:day])
-        predicted_price = self.predictor.predict_next()
-        action = self.trader.decide(predicted_price, current_price, ma)
-        self.trader.trade(action, current_price)
-        asset = self.trader.cash + self.trader.stock * current_price
-        self.trader.asset_history.append(asset)
-    self.trader.finalize(self.data[-1])
-```
-
 ---
 
 ## 4.  프로젝트의 한계

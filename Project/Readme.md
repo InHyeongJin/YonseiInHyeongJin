@@ -1,100 +1,153 @@
-# 주식 시뮬레이션 프로젝트 보고서: Adaptive Trading Simulator
-
-## 1. 주제 소개
-
-본 프로젝트는 시장 가격을 선형 점화식 기반으로 예측하고, 이를 바탕으로 간단한 투자 전략을 수행하는 **주식 시뮬레이션 프로그램**입니다. 실제 주식 시장의 동태적 특성과 예측 불확실성을 반영하여, 투자자가 예측을 바탕으로 사고팔며 자산을 운용해 나가는 과정을 시뮬레이션할 수 있도록 설계되었습니다.
-
-## 2. 프로젝트 선정 동기 (Motivation)
-
-최근 금융 분야에서 머신러닝을 활용한 가격 예측 및 알고리즘 트레이딩이 활발하게 이루어지고 있습니다. 본인은 이와 같은 기술 흐름에 흥미를 느끼고, 단순한 이론적 분석을 넘어 **직접 구현을 통해 예측 기반 투자 전략을 설계**해보고 싶었습니다.
-
-특히, 예전 카드 게임 프로젝트(VH Card Game)에서 느꼈던 게임 로직 구성의 재미와, 점화식 기반 수열 시각화 프로젝트의 수학적 사고력을 이번 프로젝트에도 접목해보고자 하였습니다.
-
-"단순하지만 강화 가능한 예측과 투자 전략 시스템"이라는 콘셉트로 본 프로젝트를 설계하게 되었습니다.
-
-## 3. 코드 설명
-
-### (1) 가격 생성 모델
-
-* `MarketSimulator` 클래스에서 시장 가격을 생성합니다.
-* 초기 가격은 `[100, 102]`로 설정되고, 이후에는 약간의 \*\*추세 요인(trend\_factor)\*\*과 \*\*정규분포 기반의 충격(shock)\*\*을 통해 가격이 동적으로 생성됩니다.
-
-```python
-trend_factor = np.random.uniform(0.95, 1.05)
-shock = np.random.normal(0, 3)
-next_price = trend_factor * prices[-1] + shock
-```
-
-### (2) 예측기 (Predictor)
-
-* `AdaptiveRecurrencePredictor` 클래스는 직전 두 시점의 가격을 기반으로 **선형 회귀 계수**를 추정합니다.
-* 예측은 `prev2 * w1 + prev1 * w2` 형식으로 이루어집니다.
-* `predict → 결정(decide) → 학습(fit)` 순서로 작동하여 **실제 미래 가격은 반영하지 않은 상태로 예측**이 이루어집니다.
-
-### (3) 트레이더 전략 (Trader)
-
-* `Trader` 클래스는 다음과 같은 규칙을 기반으로 매매 결정을 내립니다:
-
-| 조건                 | 행동           |
-| ------------------ | ------------ |
-| 예측 가격 - 실제 가격 < 2  | Hold (관망)    |
-| 예측 상승률 > 2%        | 자금의 75%로 매수  |
-| 예측 상승률 1\~2%       | 자금의 30%로 매수  |
-| 예측 하락률 > 1%        | 전량 매도        |
-| 현재가가 매입가보다 5% 하락 시 | Stop-loss 매도 |
-
-* 이 외에도 평균 매입 단가 추적, 예측 오차 필터링, 거래 내역 기록 기능을 포함합니다.
-
-### (4) 시각화 및 출력
-
-* `matplotlib`을 이용하여 다음 항목 시각화:
-
-  * 실제 가격 / 예측 가격 / 이동 평균 (5일)
-  * 순자산(Net Worth) 변화 추이
-
-## 4. 예시 실행 결과 (Simulation Output)
-
-### (1) 거래 내역 테이블 (일부 발췌)
-
-| Round | Price  | Predicted | Cash     | Shares | Action  |
-| ----- | ------ | --------- | -------- | ------ | ------- |
-| 1     | 102.20 | 102.00    | 10000.00 | 0      | Hold    |
-| 4     | 100.88 | 105.06    | 2535.15  | 74     | Buy 74  |
-| 5     | 105.19 | 99.59     | 10319.01 | 0      | Sell 74 |
-| ...   | ...    | ...       | ...      | ...    | ...     |
-| 28    | 92.06  | 86.68     | 9583.02  | 0      | Sell 97 |
-
-**최종 자산 가치**: **9583.02원**
-
-### (2) 시각화 결과
-
-#### 📈 Market Price vs Predicted
-
-![Price Prediction Graph](file-PkFqxy3JNmW3t7h6qkox4h)
-
-#### 💰 Trader Net Worth Over Time
-
-![Net Worth Graph](file-SuTFgUn8avZrT7XkiSuVKz)
-
-## 5. 프로젝트의 한계
-
-* **예측 모델 단순성**: 현재는 단순 선형 계수 기반 예측만 사용되고 있어, 고급 모델에 비해 정확도가 낮습니다.
-* **시장 현실 반영 부족**: 거래 수수료, 슬리피지, 체결 조건, 여러 투자자의 상호작용 등의 실제 시장 복잡성이 배제되어 있습니다.
-* **전략 다양성 부족**: 현재 전략은 상승/하락에 대한 반응만을 기반으로 하고 있어, 횡보장, 변동성 고려 등 다양한 조건이 미반영되어 있습니다.
-
-## 6. 결론 및 향후 개선 방향
-
-이번 프로젝트를 통해 "간단한 수학적 예측 모델 기반으로도 시뮬레이션이 충분히 가능하다"는 점을 체험했습니다. 또한 매 라운드마다 전략이 자산에 어떤 영향을 미치는지를 명확히 확인할 수 있었습니다.
-
-향후에는 다음과 같은 방향으로 개선해볼 수 있습니다:
-
-* LSTM 등 머신러닝 기반 시계열 예측 모델 적용
-* 투자 전략 다양화 (ex. 모멘텀, 평균회귀, 포트폴리오 분산)
-* 거래 수수료, 리스크 조정 수익률 반영
-* 여러 투자자간 경쟁 및 시장 영향력 모델링
-
-이처럼 금융/수학/프로그래밍이 결합된 시뮬레이션은 실제 산업 응용으로 확장 가능성이 높으며, 학습 효율도 매우 뛰어남을 느꼈습니다.
+# 📈 주제: 주가 예측 기반 자동매매 시뮬레이션 프로젝트
 
 ---
 
-> 본 프로젝트는 Python 3 환경에서 실행되며, 주요 라이브러리는 `numpy`, `matplotlib`, `prettytable`을 사용하였습니다.
+## 1. 🔍 모티베이션 (프로젝트를 하게 된 동기)
+
+주식 시장에서는 예측 불가능한 가격 변동성과 인간 감정에 따른 의사결정으로 인해 수익을 내기 어려운 경우가 많다. 이러한 문제를 해결하고자, 과거 데이터를 기반으로 일정한 규칙성을 포착하여 주가를 예측하고, 이에 기반해 자동으로 매매 결정을 내리는 프로그램을 만들어 보고 싶었다. 특히, 반복 수열 구조를 이용한 예측 방식과 매매 전략을 결합하여 시뮬레이션 결과를 시각화하는 통합적인 시스템을 구현하는 것이 본 프로젝트의 핵심 목표였다.
+
+---
+
+## 2. 📚 이론적 배경
+
+* **선형 회귀**와 **이동 평균선 (Moving Average)**: 주가 데이터의 추세를 파악하는 기법으로 사용되며, 단기-장기 이동 평균선을 통해 매수/매도 시점을 파악할 수 있다.
+* **선형 점화식 (Linear Recurrence Relation)**: 이전 항의 값으로 다음 항을 예측하는 수학적 모델로, 주가 예측 모델의 근간이 된다.
+* **시뮬레이션 기반 자동매매 전략**: 일정한 규칙에 따라 매수/매도 조건을 판단하고 포지션을 취하는 전략으로, 인간의 개입 없이 자동으로 작동한다.
+
+---
+
+## 3. 🧠 코드 작성방법 및 설명
+
+### 핵심 구성 요소: 총 4개의 클래스 기반 구조
+
+### 1. `AdaptiveRecurrencePredictor`
+
+> **역할**: 과거 데이터를 기반으로 한 점화식 예측 모델 구현
+
+* `__init__`: 예측할 과거 주기 길이(`window_size`) 설정
+* `fit`: 과거 가격 데이터를 저장함
+* `predict_next`: 최근 `window_size` 만큼의 데이터를 이용해 다음 값을 단순 선형 회귀를 통해 예측
+
+```python
+def predict_next(self):
+    if len(self.data) < self.window_size:
+        return self.data[-1]
+    X = np.arange(self.window_size).reshape(-1, 1)
+    y = np.array(self.data[-self.window_size:])
+    model = LinearRegression().fit(X, y)
+    return model.predict([[self.window_size]])[0]
+```
+
+---
+
+### 2. `MarketSimulator`
+
+> **역할**: 시뮬레이션용 시장 데이터 생성 (랜덤 워크 + 노이즈)
+
+* `generate_data`: 초기 가격을 기준으로 확률적 주가 변동 시뮬레이션
+* `get_data`: n일 간의 가격 데이터 출력
+
+```python
+def generate_data(self, steps=100):
+    price = self.initial_price
+    self.data = []
+    for _ in range(steps):
+        change_percent = random.uniform(-self.volatility, self.volatility)
+        price *= (1 + change_percent)
+        self.data.append(price)
+    return self.data
+```
+
+---
+
+### 3. `Trader`
+
+> **역할**: 예측값과 실제 이동 평균선을 기준으로 매수/매도 판단 후 포지션 변화
+
+* `decide`: 다음날 가격을 예측하고, 현재가와 비교 후 행동 결정
+* `trade`: `cash`, `stock`, `asset_history` 업데이트
+* `finalize`: 시뮬레이션 종료 후 잔여 주식을 모두 매도하여 현금화
+
+```python
+def trade(self, action, current_price):
+    if action == 'buy':
+        amount = self.cash / current_price
+        self.stock += amount
+        self.cash = 0
+    elif action == 'sell':
+        self.cash += self.stock * current_price
+        self.stock = 0
+```
+
+---
+
+### 4. `Simulator`
+
+> **역할**: 전체 시뮬레이션 실행 및 결과 시각화
+
+* `run`: 예측-매매 루프 실행, 각 시점의 순자산 기록
+* `plot_results`: 실제 가격, 예측값, 자산 변화, 이동평균선 등 시각화
+
+```python
+def run(self):
+    for day in range(self.predictor.window_size, len(self.data)):
+        current_price = self.data[day]
+        ma = np.mean(self.data[day - self.predictor.window_size:day])
+        self.predictor.fit(self.data[day - self.predictor.window_size:day])
+        predicted_price = self.predictor.predict_next()
+        action = self.trader.decide(predicted_price, current_price, ma)
+        self.trader.trade(action, current_price)
+        asset = self.trader.cash + self.trader.stock * current_price
+        self.trader.asset_history.append(asset)
+    self.trader.finalize(self.data[-1])
+```
+
+---
+
+## 4. ⚠️ 프로젝트의 한계
+
+* 매우 단순한 **선형 회귀**만으로 예측하므로, 실제 주가처럼 비선형적이고 외부 변수가 많은 데이터에는 약할 수 있음
+* 현재 전략은 단일 이동 평균과 비교해 예측가가 높으면 매수, 낮으면 매도하는 구조로, **리스크 관리**가 부족함
+* 실제 시장의 **수수료**, **슬리피지**, **심리적 요소**, **변동성 급등** 등은 반영되지 않음
+
+---
+
+## 5. ✅ 결론 및 개선점
+
+### ✔️ 성과
+
+* 반복 수열 기반의 간단한 머신 예측 모델과 자동 매매 전략을 연계하여 시뮬레이션 수행
+* 시각화를 통해 자산 추이와 예측 오차 시각적으로 확인 가능
+
+### 🔧 개선 아이디어
+
+* 예측 모델을 **LSTM**, **ARIMA**, **Transformer 기반 시계열 모델** 등으로 고도화
+* **다중 이동 평균선 전략 (예: 골든크로스, 데드크로스)** 도입
+* 변동성 지표 (예: RSI, MACD) 등 다양한 보조지표 활용 가능
+* 포트폴리오 개념으로 **다중 종목** 매매 시뮬레이션 가능성 탐색
+
+---
+
+## 🛠 사용 라이브러리
+
+```python
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LinearRegression
+import random
+```
+
+---
+
+## 🔚 실행 방법 (예시)
+
+```python
+market = MarketSimulator(initial_price=100)
+data = market.generate_data(steps=100)
+
+predictor = AdaptiveRecurrencePredictor(window_size=5)
+trader = Trader(cash=10000)
+simulator = Simulator(data, predictor, trader)
+simulator.run()
+simulator.plot_results()
+```

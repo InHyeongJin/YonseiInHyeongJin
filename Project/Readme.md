@@ -1,174 +1,100 @@
-# 주식 시뮬레이션 프로젝트: Adaptive Trading Simulator
+# 주식 시뮬레이션 프로젝트 보고서: Adaptive Trading Simulator
 
-## 📌 프로젝트 개요
+## 1. 주제 소개
 
-Adaptive Trading Simulator는 시장 가격의 움직임을 단순한 수학 모델로 시뮬레이션하고, 그에 따라 예측과 투자 전략을 수행해보는 **투자 전략 실험 플랫폼**입니다. 실제 주식 시장처럼 가격이 랜덤하게 변동하며, 예측기를 통해 미래 가격을 예측하고, 예측값을 바탕으로 매매 전략을 실행합니다.
+본 프로젝트는 시장 가격을 선형 점화식 기반으로 예측하고, 이를 바탕으로 간단한 투자 전략을 수행하는 **주식 시뮬레이션 프로그램**입니다. 실제 주식 시장의 동태적 특성과 예측 불확실성을 반영하여, 투자자가 예측을 바탕으로 사고팔며 자산을 운용해 나가는 과정을 시뮬레이션할 수 있도록 설계되었습니다.
+
+## 2. 프로젝트 선정 동기 (Motivation)
+
+최근 금융 분야에서 머신러닝을 활용한 가격 예측 및 알고리즘 트레이딩이 활발하게 이루어지고 있습니다. 본인은 이와 같은 기술 흐름에 흥미를 느끼고, 단순한 이론적 분석을 넘어 **직접 구현을 통해 예측 기반 투자 전략을 설계**해보고 싶었습니다.
+
+특히, 예전 카드 게임 프로젝트(VH Card Game)에서 느꼈던 게임 로직 구성의 재미와, 점화식 기반 수열 시각화 프로젝트의 수학적 사고력을 이번 프로젝트에도 접목해보고자 하였습니다.
+
+"단순하지만 강화 가능한 예측과 투자 전략 시스템"이라는 콘셉트로 본 프로젝트를 설계하게 되었습니다.
+
+## 3. 코드 설명
+
+### (1) 가격 생성 모델
+
+* `MarketSimulator` 클래스에서 시장 가격을 생성합니다.
+* 초기 가격은 `[100, 102]`로 설정되고, 이후에는 약간의 \*\*추세 요인(trend\_factor)\*\*과 \*\*정규분포 기반의 충격(shock)\*\*을 통해 가격이 동적으로 생성됩니다.
+
+```python
+trend_factor = np.random.uniform(0.95, 1.05)
+shock = np.random.normal(0, 3)
+next_price = trend_factor * prices[-1] + shock
+```
+
+### (2) 예측기 (Predictor)
+
+* `AdaptiveRecurrencePredictor` 클래스는 직전 두 시점의 가격을 기반으로 **선형 회귀 계수**를 추정합니다.
+* 예측은 `prev2 * w1 + prev1 * w2` 형식으로 이루어집니다.
+* `predict → 결정(decide) → 학습(fit)` 순서로 작동하여 **실제 미래 가격은 반영하지 않은 상태로 예측**이 이루어집니다.
+
+### (3) 트레이더 전략 (Trader)
+
+* `Trader` 클래스는 다음과 같은 규칙을 기반으로 매매 결정을 내립니다:
+
+| 조건                 | 행동           |
+| ------------------ | ------------ |
+| 예측 가격 - 실제 가격 < 2  | Hold (관망)    |
+| 예측 상승률 > 2%        | 자금의 75%로 매수  |
+| 예측 상승률 1\~2%       | 자금의 30%로 매수  |
+| 예측 하락률 > 1%        | 전량 매도        |
+| 현재가가 매입가보다 5% 하락 시 | Stop-loss 매도 |
+
+* 이 외에도 평균 매입 단가 추적, 예측 오차 필터링, 거래 내역 기록 기능을 포함합니다.
+
+### (4) 시각화 및 출력
+
+* `matplotlib`을 이용하여 다음 항목 시각화:
+
+  * 실제 가격 / 예측 가격 / 이동 평균 (5일)
+  * 순자산(Net Worth) 변화 추이
+
+## 4. 예시 실행 결과 (Simulation Output)
+
+### (1) 거래 내역 테이블 (일부 발췌)
+
+| Round | Price  | Predicted | Cash     | Shares | Action  |
+| ----- | ------ | --------- | -------- | ------ | ------- |
+| 1     | 102.20 | 102.00    | 10000.00 | 0      | Hold    |
+| 4     | 100.88 | 105.06    | 2535.15  | 74     | Buy 74  |
+| 5     | 105.19 | 99.59     | 10319.01 | 0      | Sell 74 |
+| ...   | ...    | ...       | ...      | ...    | ...     |
+| 28    | 92.06  | 86.68     | 9583.02  | 0      | Sell 97 |
+
+**최종 자산 가치**: **9583.02원**
+
+### (2) 시각화 결과
+
+#### 📈 Market Price vs Predicted
+
+![Price Prediction Graph](file-PkFqxy3JNmW3t7h6qkox4h)
+
+#### 💰 Trader Net Worth Over Time
+
+![Net Worth Graph](file-SuTFgUn8avZrT7XkiSuVKz)
+
+## 5. 프로젝트의 한계
+
+* **예측 모델 단순성**: 현재는 단순 선형 계수 기반 예측만 사용되고 있어, 고급 모델에 비해 정확도가 낮습니다.
+* **시장 현실 반영 부족**: 거래 수수료, 슬리피지, 체결 조건, 여러 투자자의 상호작용 등의 실제 시장 복잡성이 배제되어 있습니다.
+* **전략 다양성 부족**: 현재 전략은 상승/하락에 대한 반응만을 기반으로 하고 있어, 횡보장, 변동성 고려 등 다양한 조건이 미반영되어 있습니다.
+
+## 6. 결론 및 향후 개선 방향
+
+이번 프로젝트를 통해 "간단한 수학적 예측 모델 기반으로도 시뮬레이션이 충분히 가능하다"는 점을 체험했습니다. 또한 매 라운드마다 전략이 자산에 어떤 영향을 미치는지를 명확히 확인할 수 있었습니다.
+
+향후에는 다음과 같은 방향으로 개선해볼 수 있습니다:
+
+* LSTM 등 머신러닝 기반 시계열 예측 모델 적용
+* 투자 전략 다양화 (ex. 모멘텀, 평균회귀, 포트폴리오 분산)
+* 거래 수수료, 리스크 조정 수익률 반영
+* 여러 투자자간 경쟁 및 시장 영향력 모델링
+
+이처럼 금융/수학/프로그래밍이 결합된 시뮬레이션은 실제 산업 응용으로 확장 가능성이 높으며, 학습 효율도 매우 뛰어남을 느꼈습니다.
 
 ---
 
-## 🎯 프로젝트 목적 및 동기
-
-* **직접 시계열 데이터를 생성하고, 예측기를 활용하여 매매 전략을 테스트해보고 싶다**는 동기에서 출발
-* 예전 프로젝트들(카드 게임, 수열 시각화)처럼 단순한 구조 안에 논리적/수학적 설계가 포함되도록 구성
-* 실제 시장처럼 동적으로 변하는 데이터를 다뤄보고, 예측 기반 의사결정 시뮬레이션을 수행함으로써 **금융·AI 융합**의 학습 기회를 얻고자 함
-
----
-
-## 💻 코드 구성 및 설명
-
-### 1. MarketSimulator 클래스
-
-시장 가격을 생성하는 클래스입니다.
-
-```python
-class MarketSimulator:
-    def __init__(self):
-        self.prices = [100, 102]  # 초기 두 가격
-
-    def simulate(self, rounds):
-        for _ in range(rounds - 2):
-            prev2, prev1 = self.prices[-2], self.prices[-1]
-            trend_factor = np.random.uniform(0.95, 1.05)
-            shock = np.random.normal(0, 3)
-            next_price = trend_factor * prev1 + shock
-            self.prices.append(max(1, next_price))
-        return self.prices
-```
-
-* `trend_factor`와 `shock`을 조합하여 **현실적인 가격 등락**을 생성
-* 가격이 1보다 작아지지 않도록 안정화
-
-### 2. AdaptiveRecurrencePredictor 클래스
-
-간단한 선형 계수 기반 예측기입니다.
-
-```python
-class AdaptiveRecurrencePredictor:
-    def __init__(self):
-        self.w1, self.w2 = 0.5, 0.5
-
-    def predict_next(self, prev2, prev1):
-        return self.w1 * prev2 + self.w2 * prev1
-
-    def fit(self, prev2, prev1, actual):
-        lr = 0.001
-        pred = self.predict_next(prev2, prev1)
-        error = actual - pred
-        self.w1 += lr * error * prev2
-        self.w2 += lr * error * prev1
-```
-
-* `predict_next`: 두 시점 이전 가격과 이전 가격의 선형 결합으로 다음 가격을 예측
-* `fit`: 오차 기반으로 학습률 `lr`을 적용해 가중치를 업데이트
-
-### 3. Trader 클래스
-
-예측에 따라 실제 매수/매도 결정을 내리는 클래스입니다.
-
-```python
-class Trader:
-    def __init__(self, initial_cash):
-        self.cash = initial_cash
-        self.shares = 0
-        self.history = []
-        self.avg_buy_price = None
-```
-
-#### 주요 메서드:
-
-```python
-    def decide(self, current_price, predicted):
-        action = "Hold"
-        gain_ratio = (predicted - current_price) / current_price
-        if self.avg_buy_price and current_price < 0.95 * self.avg_buy_price:
-            self.cash += self.shares * current_price
-            action = f"Stop-loss: Sell {self.shares}"
-            self.shares = 0
-            self.avg_buy_price = None
-        elif abs(predicted - current_price) < 2:
-            action = "Hold"
-        elif gain_ratio > 0.02:
-            to_buy = int(0.75 * self.cash / current_price)
-            if to_buy > 0:
-                self.cash -= to_buy * current_price
-                self.avg_buy_price = current_price
-                self.shares += to_buy
-                action = f"Buy {to_buy}"
-        elif gain_ratio > 0.01:
-            to_buy = int(0.3 * self.cash / current_price)
-            if to_buy > 0:
-                self.cash -= to_buy * current_price
-                self.avg_buy_price = current_price
-                self.shares += to_buy
-                action = f"Buy {to_buy}"
-        elif gain_ratio < -0.01 and self.shares > 0:
-            self.cash += self.shares * current_price
-            action = f"Sell {self.shares}"
-            self.shares = 0
-            self.avg_buy_price = None
-        self.history.append((current_price, predicted, self.cash, self.shares, action))
-```
-
-* 예측 상승률(gain\_ratio)에 따라 **보수적 또는 공격적 매수**
-* 예측 하락 시 **전량 매도**
-* 손실폭이 -5% 초과 시 **Stop-loss 발동**
-
-### 4. TradingSimulator 클래스
-
-전체 시뮬레이션 실행을 담당합니다.
-
-```python
-class TradingSimulator:
-    def __init__(self, rounds=30):
-        self.rounds = rounds
-        self.market = MarketSimulator()
-        self.predictor = AdaptiveRecurrencePredictor()
-        self.trader = Trader(initial_cash=10000)
-```
-
-```python
-    def run(self):
-        prices = self.market.simulate(self.rounds)
-        for i in range(2, self.rounds):
-            prev2, prev1 = prices[i - 2], prices[i - 1]
-            predicted = self.predictor.predict_next(prev2, prev1)
-            actual = prices[i]
-            self.trader.decide(actual, predicted)
-            self.predictor.fit(prev2, prev1, actual)
-        return prices, self.trader.history
-```
-
-### 5. 시각화 함수
-
-* `matplotlib.pyplot`을 이용해 실제 가격, 예측 가격, 이동 평균선(5일), 순자산 그래프 출력
-* `PrettyTable`로 거래 로그 테이블 출력
-
----
-
-## ⚠ 프로젝트 한계점
-
-* **예측 모델의 단순함**: 선형 회귀만 사용하여 복잡한 패턴 예측은 어려움
-* **시장 요인의 생략**: 수수료, 세금, 체결 조건 등이 생략됨
-* **전략 정적성**: 전략이 유연하지 않고 상황별 커스터마이징이 부족함
-
----
-
-## ✅ 결론 및 개선 방향
-
-이번 프로젝트를 통해:
-
-* 수학 기반 예측의 한계와 가능성을 확인
-* 전략 설계의 중요성과 리스크 관리의 핵심성 인식
-* 실제 자산 변화 시각화를 통한 직관적 학습 가능성 체험
-
-### 향후 개선 아이디어
-
-* 머신러닝 예측기(LSTM, Prophet 등) 도입
-* 다양한 전략 조합 실험 (모멘텀, 이동평균 크로스 등)
-* 리스크 관리 강화 (베타, 샤프 비율 적용)
-* 사용자 UI, 매개변수 조절 기능 추가
-
----
-
-> 본 프로젝트는 Python 3 환경에서 개발되었으며, 사용된 주요 라이브러리는 `numpy`, `matplotlib`, `prettytable` 입니다.
-> 본 문서는 `README.md`로 변환되어 GitHub 저장소에 포함됩니다.
+> 본 프로젝트는 Python 3 환경에서 실행되며, 주요 라이브러리는 `numpy`, `matplotlib`, `prettytable`을 사용하였습니다.
